@@ -63,6 +63,10 @@ const Cart = () => {
   const placeOrder = async () => {
     try {
       setLoading(true);
+      if (!user) {
+        toast("Please Login First", { icon: "⚠️" });
+        return;
+      }
       if (!selectedAddress) {
         toast.error("Please select an address");
         return;
