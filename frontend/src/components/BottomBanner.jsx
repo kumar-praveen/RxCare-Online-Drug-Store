@@ -3,34 +3,47 @@ import features from "../assets/features";
 
 const BottomBanner = () => {
   return (
-    <div className="relative md:mt-16">
-      <div className="max-w-6xl h-87.5">
+    <div className="relative mt-16 rounded-xl overflow-hidden">
+      {/* Desktop Image */}
+      <div className="max-w-6xl h-[350px] hidden md:block">
         <img
           src="/bottom1.jpg"
           alt="banner"
-          className="w-full hidden md:block h-full rounded-lg object-cover"
+          className="w-full h-full object-cover rounded-xl"
         />
       </div>
-      <img src="bottom-banner2.jpg" alt="banner" className="w-full md:hidden" />
 
-      <div className="absolute inset-0 flex flex-col items-center md:items-end md:justify-center pt-0 md:pt-0 md:pr-24">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-semibold text-white">
-            Why We Are the Best?
+      {/* Mobile Image */}
+      <img
+        src="/bottom-banner2.jpg"
+        alt="banner"
+        className="w-full md:hidden rounded-xl"
+      />
+
+      {/* Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-l from-black/70 to-transparent rounded-xl" />
+
+      {/* Content */}
+      <div className="absolute inset-0 flex flex-col items-center md:items-end justify-center pt-6 md:pt-0 md:pr-24 px-6">
+        <div className="max-w-xs">
+          <h1 className="text-2xl md:text-3xl font-bold text-white mb-4">
+            Why Choose RxCare?
           </h1>
-          {features.map((feature, idx) => (
-            <div key={idx} className="flex items-center gap-4 mt-2">
-              <span>{<feature.icon />}</span>
-              <div>
-                <h3 className="text-lg md:text-xl font-semibold">
-                  {feature.title}
-                </h3>
-                <p className="text-gray-500 text-xs md:text-sm">
-                  {feature.description}
-                </p>
+          <div className="flex flex-col gap-3">
+            {features.map((feature, idx) => (
+              <div key={idx} className="flex items-start gap-3">
+                <div className="bg-primary/20 p-2 rounded-full mt-0.5">
+                  <feature.icon className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-sm md:text-base font-semibold text-white">
+                    {feature.title}
+                  </h3>
+                  <p className="text-gray-300 text-xs">{feature.description}</p>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     </div>

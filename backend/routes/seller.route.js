@@ -5,6 +5,7 @@ import {
   sellerLogout,
 } from "../controllers/seller.controller.js";
 import authSeller from "../middlewares/authSeller.js";
+import { updateOrderStatus } from "../controllers/order.controller.js";
 
 const sellerRouter = express.Router();
 

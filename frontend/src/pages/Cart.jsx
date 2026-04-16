@@ -1,8 +1,18 @@
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAppContext } from "../context/AppContext";
-import { data, useNavigate } from "react-router-dom";
-import { dummyAddress } from "../assets/dummyAddresses";
 import toast, { LoaderIcon } from "react-hot-toast";
+import {
+  ShoppingCart,
+  MapPin,
+  CreditCard,
+  ArrowLeft,
+  Trash2,
+  Plus,
+  Minus,
+  ShieldCheck,
+  Truck,
+  Tag,
+} from "lucide-react";
 
 const Cart = () => {
   const {
@@ -15,8 +25,8 @@ const Cart = () => {
     axios,
     user,
     setCartItems,
+    navigate,
   } = useAppContext();
-  const navigate = useNavigate();
 
   const [cartArray, setCartArray] = useState([]);
   const [addresses, setAddresses] = useState([]);
@@ -25,22 +35,12 @@ const Cart = () => {
   const [paymentOption, setPaymentOption] = useState("COD");
   const [loading, setLoading] = useState(false);
 
-  console.log(cartArray);
-
   const getCart = () => {
     const tempArray = [];
-
     for (const key in cartItems) {
       const product = products.find((item) => item._id === key);
-
-      if (product) {
-        tempArray.push({
-          ...product, // 🔥 create NEW object
-          quantity: cartItems[key],
-        });
-      }
+      if (product) tempArray.push({ ...product, quantity: cartItems[key] });
     }
-
     setCartArray(tempArray);
   };
 
@@ -49,9 +49,7 @@ const Cart = () => {
       const { data } = await axios.get("/api/address/get");
       if (data.success) {
         setAddresses(data.addresses);
-        if (data.addresses.length > 0) {
-          setSelectedAddress(data.addresses[0]);
-        }
+        if (data.addresses.length > 0) setSelectedAddress(data.addresses[0]);
       } else {
         toast.error(data.message);
       }
@@ -60,22 +58,109 @@ const Cart = () => {
     }
   };
 
-  const placeOrder = async () => {
+  // ── Razorpay Payment Handler ─────────────────────────────────────────────
+  const handleRazorpayPayment = async () => {
     try {
-      setLoading(true);
-      if (!user) {
-        toast("Please Login First", { icon: "⚠️" });
-        return;
-      }
-      if (!selectedAddress) {
-        toast.error("Please select an address");
+      // Step 1: Create order on backend
+      const { data } = await axios.post("/api/order/razorpay", {
+        items: cartArray.map((item) => ({
+          product: item._id,
+          quantity: item.quantity,
+        })),
+        address: selectedAddress._id,
+      });
+
+      if (!data.success) {
+        toast.error(data.message);
         return;
       }
 
-      // Place Order with COD
+      // Step 2: Open Razorpay Checkout
+      const options = {
+        key: data.keyId,
+        amount: data.amount,
+        currency: data.currency,
+        name: "RxCare",
+        description: "Medicine & Healthcare Purchase",
+        image: "/logo.png", // optional
+        order_id: data.razorpayOrderId,
+        handler: async (response) => {
+          // Step 3: Verify payment on backend
+          try {
+            const { data: verifyData } = await axios.post(
+              "/api/order/verify-razorpay",
+              {
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                orderId: data.orderId,
+              },
+            );
+
+            if (verifyData.success) {
+              toast.success("Payment successful! 🎉");
+              setCartItems({});
+              navigate("/my-orders");
+            } else {
+              toast.error(verifyData.message);
+            }
+          } catch (error) {
+            toast.error("Payment verification failed");
+          }
+        },
+        prefill: {
+          name: user?.name || "",
+          email: user?.email || "",
+          contact: selectedAddress?.phone || "",
+        },
+        notes: {
+          address: `${selectedAddress?.street}, ${selectedAddress?.city}`,
+        },
+        theme: {
+          color: "#615fff", // primary color
+        },
+        modal: {
+          ondismiss: () => {
+            toast("Payment cancelled", { icon: "⚠️" });
+            setLoading(false);
+          },
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+
+      // Handle payment failure
+      rzp.on("payment.failed", (response) => {
+        toast.error(`Payment failed: ${response.error.description}`);
+        setLoading(false);
+      });
+
+      rzp.open();
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
+
+  // ── Place Order ──────────────────────────────────────────────────────────
+  const placeOrder = async () => {
+    if (!user) {
+      toast("Please login first", { icon: "⚠️" });
+      return;
+    }
+    if (!selectedAddress) {
+      toast.error("Please select a delivery address");
+      return;
+    }
+    if (cartArray.length === 0) {
+      toast.error("Your cart is empty");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
       if (paymentOption === "COD") {
         const { data } = await axios.post("/api/order/cod", {
-          userId: user._id,
           items: cartArray.map((item) => ({
             product: item._id,
             quantity: item.quantity,
@@ -90,256 +175,395 @@ const Cart = () => {
         } else {
           toast.error(data.message);
         }
+        setLoading(false);
       } else {
-        // Place Order with Stripe
-        const { data } = await axios.post("/api/order/stripe", {
-          userId: user._id,
-          items: cartArray.map((item) => ({
-            product: item._id,
-            quantity: item.quantity,
-          })),
-          address: selectedAddress._id,
-        });
-
-        if (data.success) {
-          window.location.replace(data.url);
-        } else {
-          toast.error(data.message);
-        }
+        // ✅ Razorpay — loading will be managed by modal
+        await handleRazorpayPayment();
+        // Note: don't setLoading(false) here
+        // it's handled in modal dismiss and handler
       }
     } catch (error) {
       toast.error(error.message);
-    } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (user) {
-      getUserAddress();
-    }
+    if (user) getUserAddress();
   }, [user]);
 
   useEffect(() => {
-    if (products.length > 0 && cartItems) {
-      getCart();
-    }
+    if (products.length > 0 && cartItems) getCart();
   }, [products, cartItems]);
 
-  return products.length > 0 && cartItems ? (
-    <div className="flex flex-col md:flex-row mt-16">
-      <div className="flex-1 max-w-4xl">
-        <h1 className="text-3xl font-medium mb-6">
-          Shopping Cart{" "}
-          <span className="text-sm text-primary-dull">{getCartCount()}</span>
-        </h1>
-
-        <div className="grid grid-cols-[2fr_1fr_1fr] text-gray-500 text-base font-medium pb-3">
-          <p className="text-left">Product Details</p>
-          <p className="text-center">Subtotal</p>
-          <p className="text-center">Action</p>
+  // ── Empty Cart ─────────────────────────────────────────────────────────────
+  if (!products.length || !cartItems || getCartCount() === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <div className="bg-primary/10 p-6 rounded-full">
+          <ShoppingCart className="w-14 h-14 text-primary" />
         </div>
-
-        {cartArray.map((product) => (
-          <div
-            key={product._id}
-            className="grid grid-cols-[2fr_1fr_1fr] text-gray-500 items-center text-sm md:text-base font-medium pt-3"
-          >
-            <div className="flex items-center md:gap-6 gap-3">
-              <div
-                onClick={() => {
-                  navigate(
-                    `/products/${product.category.toLowerCase()}/${product._id}`,
-                  );
-                  scrollTo(0, 0);
-                }}
-                className="cursor-pointer w-24 h-24 flex items-center justify-center border border-gray-300 rounded overflow-hidden"
-              >
-                <img
-                  className="max-w-full h-full object-cover"
-                  src={product.image[0]}
-                  alt={product.name}
-                />
-              </div>
-              <div>
-                <p className="hidden md:block font-semibold">{product.name}</p>
-                <div className="font-normal text-gray-500/70">
-                  <p>
-                    Size: <span>{product.size || "N/A"}</span>
-                  </p>
-                  <div className="flex items-center">
-                    <p>Qty:</p>
-                    <select
-                      onChange={(e) =>
-                        updateCartItem(product._id, Number(e.target.value))
-                      }
-                      value={cartItems[product._id]}
-                      className="outline-none"
-                    >
-                      {Array(
-                        cartItems[product._id] > 9 ? cartItems[product._id] : 9,
-                      )
-                        .fill("")
-                        .map((_, index) => (
-                          <option key={index} value={index + 1}>
-                            {index + 1}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <p className="text-center">
-              &#8377;{product.offerPrice * product.quantity}
-            </p>
-            <button
-              onClick={() => removeFromCart(product._id)}
-              className="cursor-pointer mx-auto"
-            >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 20 20"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="m12.5 7.5-5 5m0-5 5 5m5.833-2.5a8.333 8.333 0 1 1-16.667 0 8.333 8.333 0 0 1 16.667 0"
-                  stroke="#FF532E"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-          </div>
-        ))}
-
+        <h2 className="text-2xl font-bold text-gray-700">Your cart is empty</h2>
+        <p className="text-gray-400 text-sm">
+          Add medicines and healthcare products to your cart
+        </p>
         <button
           onClick={() => {
             navigate("/products");
             scrollTo(0, 0);
           }}
-          className="group cursor-pointer flex items-center mt-8 gap-2 text-primary-dull font-medium"
+          className="mt-2 px-8 py-3 bg-primary text-white rounded-full text-sm font-medium hover:bg-primary-dull transition"
         >
-          <svg
-            width="15"
-            height="11"
-            viewBox="0 0 15 11"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M14.09 5.5H1M6.143 10 1 5.5 6.143 1"
-              stroke="#615fff"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          Continue Shopping
+          Browse Products
         </button>
       </div>
+    );
+  }
 
-      <div className="max-w-90 w-full bg-gray-100/40 p-5 max-md:mt-16 border border-gray-300/70">
-        <h2 className="text-xl md:text-xl font-medium">Order Summary</h2>
-        <hr className="border-gray-300 my-5" />
+  const subtotal = getCartAmount();
+  const tax = Math.round((subtotal * 2) / 100);
+  const total = subtotal + tax;
+  const savings = cartArray.reduce(
+    (acc, item) => acc + (item.price - item.offerPrice) * item.quantity,
+    0,
+  );
 
-        <div className="mb-6">
-          <p className="text-sm font-medium uppercase">Delivery Address</p>
-          <div className="relative flex justify-between items-start mt-2">
-            <p className="text-gray-500">
-              {selectedAddress
-                ? `${selectedAddress.street}, ${selectedAddress.city}, ${selectedAddress.state}, ${selectedAddress.country}`
-                : "No address found"}
-            </p>
-            <button
-              onClick={() => setShowAddress(!showAddress)}
-              className="text-primary-dull hover:underline cursor-pointer"
-            >
-              Change
-            </button>
-            {showAddress && (
-              <div className="absolute top-12 py-1 bg-white border border-gray-300 text-sm w-full">
-                {addresses.map((address, index) => (
-                  <p
-                    key={index}
-                    onClick={() => {
-                      setSelectedAddress(address);
-                      setShowAddress(false);
-                    }}
-                    className="text-gray-500 p-2 hover:bg-gray-100 cursor-pointer"
-                  >
-                    {address.street}, {address.city}, {address.state},{" "}
-                    {address.country}
-                  </p>
-                ))}
-                <p
+  return (
+    <div className="mt-10 pb-16">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
+          Shopping Cart
+        </h1>
+        <p className="text-gray-500 text-sm mt-1">
+          {getCartCount()} item{getCartCount() !== 1 ? "s" : ""} in your cart
+        </p>
+      </div>
+
+      <div className="flex flex-col lg:flex-row gap-8">
+        {/* ── Left: Cart Items ─────────────────────────────────────── */}
+        <div className="flex-1">
+          {savings > 0 && (
+            <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 text-sm font-medium px-4 py-3 rounded-xl mb-5">
+              <Tag className="w-4 h-4 shrink-0" />
+              You're saving ₹{savings} on this order!
+            </div>
+          )}
+
+          <div className="flex flex-col gap-4">
+            {cartArray.map((product) => (
+              <div
+                key={product._id}
+                className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex gap-4 items-start"
+              >
+                <div
                   onClick={() => {
-                    navigate("/add-address");
+                    navigate(
+                      `/products/${product.category.toLowerCase()}/${product._id}`,
+                    );
                     scrollTo(0, 0);
                   }}
-                  className="text-primary-dull text-center cursor-pointer p-2 hover:bg-primary-dull/10"
+                  className="w-20 h-20 md:w-24 md:h-24 shrink-0 bg-gray-50 border border-gray-100 rounded-xl overflow-hidden flex items-center justify-center cursor-pointer hover:border-primary/30 transition"
                 >
-                  Add address
-                </p>
+                  <img
+                    src={product.image[0]}
+                    alt={product.name}
+                    className="w-full h-full object-contain p-1"
+                  />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className="text-[10px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full uppercase tracking-wide">
+                        {product.category}
+                      </span>
+                      <p
+                        onClick={() => {
+                          navigate(
+                            `/products/${product.category.toLowerCase()}/${product._id}`,
+                          );
+                          scrollTo(0, 0);
+                        }}
+                        className="font-semibold text-gray-800 mt-1 text-sm md:text-base cursor-pointer hover:text-primary transition line-clamp-2"
+                      >
+                        {product.name}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => removeFromCart(product._id)}
+                      className="text-gray-300 hover:text-red-400 transition shrink-0 p-1"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <span className="text-base font-bold text-gray-800">
+                      ₹{product.offerPrice}
+                    </span>
+                    <span className="text-xs text-gray-400 line-through">
+                      ₹{product.price}
+                    </span>
+                    <span className="text-xs text-green-500 font-semibold">
+                      {Math.round(
+                        ((product.price - product.offerPrice) / product.price) *
+                          100,
+                      )}
+                      % off
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between mt-3">
+                    <div className="flex items-center gap-1 border border-gray-200 rounded-lg overflow-hidden">
+                      <button
+                        onClick={() =>
+                          updateCartItem(
+                            product._id,
+                            Math.max(1, product.quantity - 1),
+                          )
+                        }
+                        className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 transition text-gray-600"
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <span className="w-8 text-center text-sm font-semibold text-gray-800">
+                        {product.quantity}
+                      </span>
+                      <button
+                        onClick={() =>
+                          updateCartItem(product._id, product.quantity + 1)
+                        }
+                        className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 transition text-gray-600"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <p className="text-sm font-bold text-gray-800">
+                      ₹{product.offerPrice * product.quantity}
+                    </p>
+                  </div>
+                </div>
               </div>
-            )}
+            ))}
           </div>
 
-          <p className="text-sm font-medium uppercase mt-6">Payment Method</p>
-
-          <select
-            onChange={(e) => setPaymentOption(e.target.value)}
-            className="w-full border border-gray-300 bg-white px-3 py-2 mt-2 outline-none"
+          <button
+            onClick={() => {
+              navigate("/products");
+              scrollTo(0, 0);
+            }}
+            className="group flex items-center gap-2 mt-6 text-primary text-sm font-medium hover:gap-3 transition-all"
           >
-            <option value="COD">Cash On Delivery</option>
-            <option value="Online">Online Payment</option>
-          </select>
+            <ArrowLeft className="w-4 h-4" />
+            Continue Shopping
+          </button>
         </div>
 
-        <hr className="border-gray-300" />
+        {/* ── Right: Order Summary ──────────────────────────────────── */}
+        <div className="lg:w-96 shrink-0">
+          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-6 sticky top-24">
+            <h2 className="text-lg font-bold text-gray-800 mb-5">
+              Order Summary
+            </h2>
 
-        <div className="text-gray-500 mt-4 space-y-2">
-          <p className="flex justify-between">
-            <span>Price</span>
-            <span>&#8377;{getCartAmount()}</span>
-          </p>
-          <p className="flex justify-between">
-            <span>Shipping Fee</span>
-            <span className="text-green-600">Free</span>
-          </p>
-          <p className="flex justify-between">
-            <span>Tax (2%)</span>
-            <span>&#8377;{(getCartAmount() * 2) / 100}</span>
-          </p>
-          <p className="flex justify-between text-lg font-medium mt-3">
-            <span>Total Amount:</span>
-            <span>&#8377;{getCartAmount() + (getCartAmount() * 2) / 100}</span>
-          </p>
+            {/* Address */}
+            <div className="mb-5">
+              <div className="flex items-center gap-2 mb-2">
+                <MapPin className="w-4 h-4 text-primary" />
+                <p className="text-sm font-semibold text-gray-700">
+                  Delivery Address
+                </p>
+              </div>
+              <div className="relative">
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                  {selectedAddress ? (
+                    <p className="text-xs text-gray-600 leading-relaxed">
+                      <span className="font-semibold text-gray-800">
+                        {selectedAddress.firstName} {selectedAddress.lastName}
+                      </span>
+                      <br />
+                      {selectedAddress.street}, {selectedAddress.city},{" "}
+                      {selectedAddress.state} - {selectedAddress.zipcode}
+                      <br />
+                      {selectedAddress.country} • 📞 {selectedAddress.phone}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-400">No address selected</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setShowAddress(!showAddress)}
+                  className="text-xs text-primary font-medium mt-1.5 hover:underline"
+                >
+                  {showAddress ? "Close" : "Change Address"}
+                </button>
+
+                {showAddress && (
+                  <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                    {addresses.length > 0 ? (
+                      addresses.map((address, index) => (
+                        <div
+                          key={index}
+                          onClick={() => {
+                            setSelectedAddress(address);
+                            setShowAddress(false);
+                          }}
+                          className={`p-3 text-xs cursor-pointer hover:bg-primary/5 transition border-b border-gray-100 last:border-0 ${
+                            selectedAddress?._id === address._id
+                              ? "bg-primary/5 text-primary font-medium"
+                              : "text-gray-600"
+                          }`}
+                        >
+                          <p className="font-semibold text-gray-800">
+                            {address.firstName} {address.lastName}
+                          </p>
+                          <p>
+                            {address.street}, {address.city}, {address.state} -{" "}
+                            {address.zipcode}
+                          </p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-gray-400 p-3 text-center">
+                        No saved addresses
+                      </p>
+                    )}
+                    <button
+                      onClick={() => {
+                        navigate("/add-address");
+                        scrollTo(0, 0);
+                      }}
+                      className="w-full text-xs text-primary font-semibold p-3 hover:bg-primary/5 transition text-center border-t border-gray-100"
+                    >
+                      + Add New Address
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Payment Method */}
+            <div className="mb-5">
+              <div className="flex items-center gap-2 mb-2">
+                <CreditCard className="w-4 h-4 text-primary" />
+                <p className="text-sm font-semibold text-gray-700">
+                  Payment Method
+                </p>
+              </div>
+              <div className="flex gap-3">
+                {["COD", "Online"].map((method) => (
+                  <button
+                    key={method}
+                    onClick={() => setPaymentOption(method)}
+                    className={`flex-1 py-2.5 text-xs font-semibold rounded-xl border-2 transition-all ${
+                      paymentOption === method
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "border-gray-200 text-gray-500 hover:border-gray-300"
+                    }`}
+                  >
+                    {method === "COD" ? "Cash on Delivery" : "Online Payment"}
+                  </button>
+                ))}
+              </div>
+
+              {/* Razorpay Badge */}
+              {paymentOption === "Online" && (
+                <div className="flex items-center gap-2 mt-3 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2">
+                  <img
+                    src="https://razorpay.com/favicon.png"
+                    alt="Razorpay"
+                    className="w-4 h-4"
+                  />
+                  <p className="text-xs text-blue-600 font-medium">
+                    Secured by Razorpay — UPI, Cards, NetBanking & more
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <hr className="border-gray-100 mb-4" />
+
+            {/* Price Breakdown */}
+            <div className="flex flex-col gap-2.5 text-sm">
+              <div className="flex justify-between text-gray-500">
+                <span>
+                  Subtotal ({getCartCount()} item
+                  {getCartCount() !== 1 ? "s" : ""})
+                </span>
+                <span>₹{subtotal}</span>
+              </div>
+              {savings > 0 && (
+                <div className="flex justify-between text-green-500 font-medium">
+                  <span>Savings</span>
+                  <span>− ₹{savings}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-gray-500">
+                <span>Shipping</span>
+                <span className="text-green-500 font-medium">FREE</span>
+              </div>
+              <div className="flex justify-between text-gray-500">
+                <span>Tax (2%)</span>
+                <span>₹{tax}</span>
+              </div>
+              <hr className="border-gray-100" />
+              <div className="flex justify-between text-base font-bold text-gray-800">
+                <span>Total</span>
+                <span>₹{total}</span>
+              </div>
+            </div>
+
+            {/* Place Order Button */}
+            <button
+              onClick={placeOrder}
+              disabled={loading}
+              className={`w-full mt-5 py-3.5 rounded-xl text-white font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
+                loading
+                  ? "bg-primary/60 cursor-not-allowed"
+                  : "bg-primary hover:bg-primary-dull cursor-pointer"
+              }`}
+            >
+              {loading ? (
+                <>
+                  <LoaderIcon className="w-4 h-4 animate-spin" />
+                  Processing...
+                </>
+              ) : paymentOption === "COD" ? (
+                "Place Order"
+              ) : (
+                "Pay with Razorpay"
+              )}
+            </button>
+
+            {/* Assurance */}
+            <div className="flex flex-col gap-2 mt-5 pt-4 border-t border-gray-100">
+              {[
+                {
+                  icon: ShieldCheck,
+                  text: "100% Secure Payments",
+                  color: "text-green-500",
+                },
+                {
+                  icon: Truck,
+                  text: "Free & Fast Delivery",
+                  color: "text-blue-500",
+                },
+              ].map(({ icon: Icon, text, color }, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center gap-2 text-xs text-gray-400"
+                >
+                  <Icon className={`w-3.5 h-3.5 ${color}`} />
+                  {text}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
-
-        <button
-          onClick={placeOrder}
-          className={`w-full py-3 mt-6 bg-primary-dull text-white font-medium hover:bg-primary transition flex items-center justify-center ${loading ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
-          disabled={loading}
-        >
-          {paymentOption === "COD" ? (
-            loading ? (
-              <span className="flex items-center gap-2">
-                Placing Order... <LoaderIcon />
-              </span>
-            ) : (
-              "Place Order"
-            )
-          ) : (
-            "Proceed to Checkout"
-          )}
-        </button>
       </div>
     </div>
-  ) : null;
+  );
 };
 
 export default Cart;

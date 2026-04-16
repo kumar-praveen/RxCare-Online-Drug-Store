@@ -1,77 +1,46 @@
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAppContext } from "../../context/AppContext";
 import toast from "react-hot-toast";
+import {
+  PlusSquare,
+  List,
+  ShoppingBag,
+  LogOut,
+  User,
+  Menu,
+  X,
+  LayoutDashboard,
+  Upload
+} from "lucide-react";
+import { useState } from "react";
 
 const SellerLayout = () => {
-  const { isSeller, setIsSeller, axios } = useAppContext();
+  const { setIsSeller, axios } = useAppContext();
   const navigate = useNavigate();
-
-  //   const dashboardicon = (
-  //     <svg
-  //       className="w-6 h-6"
-  //       aria-hidden="true"
-  //       xmlns="http://www.w3.org/2000/svg"
-  //       width="24"
-  //       height="24"
-  //       fill="none"
-  //       viewBox="0 0 24 24"
-  //     >
-  //       <path
-  //         stroke="currentColor"
-  //         strokeLinejoin="round"
-  //         strokeWidth="2"
-  //         d="M4 5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5Zm16 14a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2ZM4 13a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-6Zm16-2a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v6Z"
-  //       />
-  //     </svg>
-  //   );
-
-  //   const overviewicon = (
-  //     <svg
-  //       className="w-6 h-6"
-  //       aria-hidden="true"
-  //       xmlns="http://www.w3.org/2000/svg"
-  //       width="24"
-  //       height="24"
-  //       fill="none"
-  //       viewBox="0 0 24 24"
-  //     >
-  //       <path
-  //         stroke="currentColor"
-  //         strokeLinecap="round"
-  //         strokeWidth="2"
-  //         d="M7.111 20A3.111 3.111 0 0 1 4 16.889v-12C4 4.398 4.398 4 4.889 4h4.444a.89.89 0 0 1 .89.889v12A3.111 3.111 0 0 1 7.11 20Zm0 0h12a.889.889 0 0 0 .889-.889v-4.444a.889.889 0 0 0-.889-.89h-4.389a.889.889 0 0 0-.62.253l-3.767 3.665a.933.933 0 0 0-.146.185c-.868 1.433-1.581 1.858-3.078 2.12Zm0-3.556h.009m7.933-10.927 3.143 3.143a.889.889 0 0 1 0 1.257l-7.974 7.974v-8.8l3.574-3.574a.889.889 0 0 1 1.257 0Z"
-  //       />
-  //     </svg>
-  //   );
-
-  //   const chaticon = (
-  //     <svg
-  //       className="w-6 h-6"
-  //       aria-hidden="true"
-  //       xmlns="http://www.w3.org/2000/svg"
-  //       width="24"
-  //       height="24"
-  //       fill="none"
-  //       viewBox="0 0 24 24"
-  //     >
-  //       <path
-  //         stroke="currentColor"
-  //         strokeLinecap="round"
-  //         strokeLinejoin="round"
-  //         strokeWidth="2"
-  //         d="M7 9h5m3 0h2M7 12h2m3 0h5M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-6.616a1 1 0 0 0-.67.257l-2.88 2.592A.5.5 0 0 1 8 18.477V17a1 1 0 0 0-1-1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"
-  //       />
-  //     </svg>
-  //   );
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const sidebarLinks = [
-    { name: "Add Product", path: "/seller", icon: "/add_icon.svg" },
+    {
+      name: "Dashboard",
+      path: "/seller",
+      icon: LayoutDashboard,
+    },
+    {
+      name: "Add Product",
+      path: "/seller/add-product",
+      icon: PlusSquare,
+    },
+    { name: "Bulk Upload", path: "/seller/bulk-add-product", icon: Upload },
     {
       name: "Product List",
       path: "/seller/product-list",
-      icon: "/product_list_icon.svg",
+      icon: List,
     },
-    { name: "Orders", path: "/seller/orders", icon: "/order_icon.svg" },
+    {
+      name: "Orders",
+      path: "/seller/orders",
+      icon: ShoppingBag,
+    },
   ];
 
   const logout = async () => {
@@ -79,6 +48,7 @@ const SellerLayout = () => {
       const { data } = await axios.get("/api/seller/logout");
       if (data.success) {
         toast.success(data.message);
+        setIsSeller(false);
         navigate("/");
       } else {
         toast.error(data.message);
@@ -88,46 +58,106 @@ const SellerLayout = () => {
     }
   };
 
-  return (
+  const SidebarContent = () => (
     <>
-      <div className="flex items-center justify-between px-4 md:px-8 border-b border-gray-300 py-3 bg-white transition-all duration-300">
-        <Link to={"/"}>
-          <h2 className="text-xl font-bold">
-            <span className="text-primary">Rx</span>Care
-          </h2>
-        </Link>
-        <div className="flex items-center gap-5 text-gray-500">
-          <p>Hi! Admin</p>
+      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest px-5 mb-3">
+        Navigation
+      </p>
+      {sidebarLinks.map((item) => (
+        <NavLink
+          key={item.name}
+          to={item.path}
+          end={item.path === "/seller"}
+          onClick={() => setSidebarOpen(false)}
+          className={({ isActive }) =>
+            `flex items-center gap-3 px-5 py-3 text-sm font-medium transition-all border-r-4 ${
+              isActive
+                ? "bg-primary/10 text-primary border-primary"
+                : "text-gray-500 border-transparent hover:bg-gray-50 hover:text-gray-700"
+            }`
+          }
+        >
+          {({ isActive }) => (
+            <>
+              <item.icon
+                className={`w-4.5 h-4.5 ${
+                  isActive ? "text-primary" : "text-gray-400"
+                }`}
+              />
+              {item.name}
+            </>
+          )}
+        </NavLink>
+      ))}
+    </>
+  );
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Navbar */}
+      <div className="flex items-center justify-between px-6 md:px-10 py-3.5 bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="md:hidden text-gray-500 hover:text-primary transition"
+          >
+            {sidebarOpen ? (
+              <X className="w-5 h-5" />
+            ) : (
+              <Menu className="w-5 h-5" />
+            )}
+          </button>
+          <Link to="/">
+            <h2 className="text-xl font-bold">
+              <span className="text-primary">Rx</span>Care
+            </h2>
+          </Link>
+          <span className="hidden sm:block text-xs font-semibold text-primary bg-primary/10 px-2.5 py-1 rounded-full">
+            Seller Portal
+          </span>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <div className="hidden sm:flex items-center gap-2 text-sm text-gray-600">
+            <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
+              <User className="w-4 h-4 text-primary" />
+            </div>
+            <span className="font-medium">Admin</span>
+          </div>
           <button
             onClick={logout}
-            className="border rounded-full text-sm px-4 py-1"
+            className="flex items-center gap-1.5 text-sm text-red-500 border border-red-200 bg-red-50 hover:bg-red-100 transition px-4 py-1.5 rounded-full font-medium"
           >
-            Logout
+            <LogOut className="w-3.5 h-3.5" />
+            <span className="hidden sm:block">Logout</span>
           </button>
         </div>
       </div>
-      <div className="flex">
-        <div className="md:w-64 w-16 border-r h-[95vh] text-base border-gray-300 pt-4 flex flex-col">
-          {sidebarLinks.map((item, index) => (
-            <NavLink
-              to={item.path}
-              key={item.name}
-              end={item.path === "/seller"}
-              className={({ isActive }) => `flex items-center py-3 px-4 gap-3 
-                            ${
-                              isActive
-                                ? "border-r-4 md:border-r-[6px] bg-primary/10 border-primary text-primary"
-                                : "hover:bg-gray-100/90 border-white"
-                            }`}
-            >
-              <img src={item.icon} alt="" className="w-7 h-7" />
-              <p className="md:block hidden text-center">{item.name}</p>
-            </NavLink>
-          ))}
-        </div>
-        <Outlet />
+
+      <div className="flex flex-1">
+        {/* Desktop Sidebar */}
+        <aside className="hidden md:flex flex-col w-60 bg-white border-r border-gray-200 min-h-[calc(100vh-57px)] sticky top-[57px] pt-6">
+          <SidebarContent />
+        </aside>
+
+        {/* Mobile Sidebar Drawer */}
+        {sidebarOpen && (
+          <div className="md:hidden fixed inset-0 z-40 flex">
+            <div className="w-60 bg-white border-r border-gray-200 pt-6 flex flex-col shadow-xl">
+              <SidebarContent />
+            </div>
+            <div
+              onClick={() => setSidebarOpen(false)}
+              className="flex-1 bg-black/30 backdrop-blur-sm"
+            />
+          </div>
+        )}
+
+        <main className="flex-1 overflow-y-auto">
+          <Outlet />
+        </main>
       </div>
-    </>
+    </div>
   );
 };
 

@@ -5,7 +5,7 @@ import Home from "./pages/Home";
 import { Toaster } from "react-hot-toast";
 import Footer from "./components/Footer";
 import { useAppContext } from "./context/AppContext";
-import Login from "./components/Login";
+import Login from "./components/Auth";
 import AllProducts from "./components/AllProducts";
 import ProductCategory from "./pages/ProductCategory";
 import ProductDetails from "./pages/ProductDetails";
@@ -15,18 +15,23 @@ import MyOrders from "./pages/MyOrders";
 import SellerLogin from "./components/seller/SellerLogin";
 import SellerLayout from "./pages/seller/SellerLayout";
 import AddProduct from "./pages/seller/AddProduct";
+import BulkAddProduct from "./pages/seller/BulkAddProduct";
 import ProductList from "./pages/seller/ProductList";
 import Orders from "./pages/seller/Orders";
+import Dashboard from "./pages/seller/Dashboard";
 import Loading from "./components/Loading";
+import VerifyEmail from "./pages/VerifyEmail";
 
 const App = () => {
   const isSellerPath = useLocation().pathname.includes("seller");
   const { showUserLogin, isSeller } = useAppContext();
+
   return (
     <div className="text-default min-h-screen text-gray-700 bg-white">
       <Toaster />
       {isSellerPath ? null : <Navbar />}
       {showUserLogin ? <Login /> : null}
+
       <div
         className={`${isSellerPath ? "" : "px-6 md:px-16 lg:px-24 xl:px-32"}`}
       >
@@ -39,11 +44,17 @@ const App = () => {
           <Route path="/add-address" element={<AddAddress />} />
           <Route path="/my-orders" element={<MyOrders />} />
           <Route path="/loader" element={<Loading />} />
+
+          {/* ✅ Verify Email Page */}
+          <Route path="/verify-email" element={<VerifyEmail />} />
+
           <Route
             path="/seller"
             element={isSeller ? <SellerLayout /> : <SellerLogin />}
           >
-            <Route index element={isSeller ? <AddProduct /> : null} />
+            <Route index element={isSeller ? <Dashboard /> : null} />
+            <Route path="add-product" element={<AddProduct />} />
+            <Route path="bulk-add-product" element={<BulkAddProduct />} />
             <Route path="product-list" element={<ProductList />} />
             <Route path="orders" element={<Orders />} />
           </Route>
